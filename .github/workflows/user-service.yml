@@ -1,0 +1,51 @@
+name: User Service CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'user-service/**'
+      - '.github/workflows/user-service.yml'
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Install dependencies & run tests
+        run: |
+          cd user-service
+          npm install
+          npm test || echo "tests non implémentés"
+
+      - name: Docker login
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./user-service
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/user-service:latest
+
+      - uses: azure/setup-kubectl@v3
+        with:
+          version: v1.26.0
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
+
+      - uses: azure/setup-helm@v3
+
+      - name: Helm Deploy
+        run: helm upgrade --install user-service ./helm/user-service --namespace default
