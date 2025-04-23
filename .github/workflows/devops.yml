@@ -28,9 +28,7 @@ jobs:
         with:
           context: ./user-service
           push: true
-          tags: $DOCKER_USER/user-service:latest
-        env:
-          DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
+          tags: ${{ secrets.DOCKER_USERNAME }}/user-service:latest
 
       - name: Docker login
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
@@ -74,9 +72,7 @@ jobs:
         with:
           context: ./salle-service
           push: true
-          tags: $DOCKER_USER/salle-service:latest
-        env:
-          DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
+          tags: ${{ secrets.DOCKER_USERNAME }}/salle-service:latest
 
       - name: Docker login
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
@@ -120,10 +116,8 @@ jobs:
         with:
           context: ./reservation-service
           push: true
-          tags: $DOCKER_USER/reservation-service:latest
-        env:
-          DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
-      
+          tags: ${{ secrets.DOCKER_USERNAME }}/reservation-service:latest
+
       - name: Docker login
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
