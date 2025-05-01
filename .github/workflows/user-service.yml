@@ -11,11 +11,15 @@ jobs:
   build-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'user-service/package-lock.json'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -26,8 +30,11 @@ jobs:
           npm install
           npm test || echo "tests non implémentés"
 
-      - name: Docker login
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
@@ -35,18 +42,50 @@ jobs:
           context: ./user-service
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/user-service:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - uses: azure/setup-kubectl@v3
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
         with:
           version: v1.26.0
 
-      - name: Configure kubeconfig
+      - name: Create manual kubeconfig
         run: |
           mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
-          chmod 600 ~/.kube/config  # Fix permissions to address the warnings
+          cat > ~/.kube/config << EOF
+          apiVersion: v1
+          kind: Config
+          clusters:
+          - name: minikube
+            cluster:
+              certificate-authority-data: ${{ secrets.MINIKUBE_CA_CERT }}
+              server: ${{ secrets.MINIKUBE_SERVER_URL }}
+          contexts:
+          - name: minikube
+            context:
+              cluster: minikube
+              user: minikube
+          current-context: minikube
+          users:
+          - name: minikube
+            user:
+              client-certificate-data: ${{ secrets.MINIKUBE_CLIENT_CERT }}
+              client-key-data: ${{ secrets.MINIKUBE_CLIENT_KEY }}
+          EOF
+          chmod 600 ~/.kube/config
 
-      - uses: azure/setup-helm@v3
+      - name: Verify kubectl connection
+        run: kubectl get nodes
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.11.2'
 
       - name: Helm Deploy
-        run: helm upgrade --install user-service ./helm/user-service --namespace default
+        run: |
+          helm upgrade --install user-service ./helm/user-service \
+            --namespace default \
+            --set image.repository=${{ secrets.DOCKER_USERNAME }}/user-service \
+            --set image.tag=latest
