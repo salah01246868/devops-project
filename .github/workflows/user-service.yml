@@ -9,7 +9,9 @@ on:
 
 jobs:
   build-deploy:
-    runs-on: ubuntu-latest
+    # Use a self-hosted runner that can access your local network
+    runs-on: self-hosted
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -18,8 +20,6 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: 'user-service/package-lock.json'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -42,49 +42,20 @@ jobs:
           context: ./user-service
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/user-service:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
+      # The self-hosted runner can access your local Minikube directly
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
-        with:
-          version: v1.26.0
-
-      - name: Create manual kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          cat > ~/.kube/config << EOF
-          apiVersion: v1
-          kind: Config
-          clusters:
-          - name: minikube
-            cluster:
-              certificate-authority-data: ${{ secrets.MINIKUBE_CA_CERT }}
-              server: ${{ secrets.MINIKUBE_SERVER_URL }}
-          contexts:
-          - name: minikube
-            context:
-              cluster: minikube
-              user: minikube
-          current-context: minikube
-          users:
-          - name: minikube
-            user:
-              client-certificate-data: ${{ secrets.MINIKUBE_CLIENT_CERT }}
-              client-key-data: ${{ secrets.MINIKUBE_CLIENT_KEY }}
-          EOF
-          chmod 600 ~/.kube/config
-
-      - name: Verify kubectl connection
-        run: kubectl get nodes
 
       - name: Setup Helm
         uses: azure/setup-helm@v3
-        with:
-          version: 'v3.11.2'
 
-      - name: Helm Deploy
+      - name: Deploy to Kubernetes
         run: |
+          # Use your local kubeconfig directly or configure it here
+          export KUBECONFIG=$HOME/.kube/config
+          
+          # Deploy using Helm
           helm upgrade --install user-service ./helm/user-service \
             --namespace default \
             --set image.repository=${{ secrets.DOCKER_USERNAME }}/user-service \
