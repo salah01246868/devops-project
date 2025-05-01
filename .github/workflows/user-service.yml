@@ -9,45 +9,43 @@ on:
 
 jobs:
   build-deploy:
-    # Use your self-hosted runner
-    runs-on: self-hosted
-    
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v3
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: 'user-service/package-lock.json'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
       - name: Install dependencies & run tests
-        shell: bash
         run: |
           cd user-service
           npm install
-          npm test || echo "tests non implementes"
-
-      # Instead of using buildx action, use regular docker commands
-      - name: Build Docker image
-        run: |
-          cd user-service
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/user-service:latest .
+          npm test || echo "tests non implémentés"
 
       - name: Docker login
-        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      - name: Push Docker image
-        run: docker push ${{ secrets.DOCKER_USERNAME }}/user-service:latest
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./user-service
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/user-service:latest
 
-      - name: Verify kubectl access
-        run: kubectl get nodes
+      - uses: azure/setup-kubectl@v3
+        with:
+          version: v1.26.0
 
-      - name: Deploy with Helm
+      - name: Configure kubeconfig
         run: |
-          helm upgrade --install user-service ./helm/user-service \
-            --namespace default \
-            --set image.repository=${{ secrets.DOCKER_USERNAME }}/user-service \
-            --set image.tag=latest
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
+
+      - uses: azure/setup-helm@v3
+
+      - name: Helm Deploy
+        run: helm upgrade --install user-service ./helm/user-service --namespace default
