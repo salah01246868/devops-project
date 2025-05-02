@@ -46,6 +46,5 @@ jobs:
           echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
 
       - uses: azure/setup-helm@v3
-
       - name: Helm Deploy
         run: helm upgrade --install user-service ./helm/user-service --namespace default
